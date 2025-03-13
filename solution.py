@@ -1,58 +1,47 @@
-import requests
-from io import BytesIO
-from PIL import Image
-import json
+import sys
+from io import BytesIO  # Этот класс поможет нам сделать картинку из потока байт
 from YandexAPITools import find_spn_delta
-from dotenv import load_dotenv
-import os
+import json
 
-path = os.path.join(os.path.dirname(__file__), '.env')
-if os.path.exists(path):
-    load_dotenv(path)
-    API_KEY = os.environ.get('API_KEY')
-    
+import requests
+from PIL import Image
 
-search_api_server = "https://search-maps.yandex.ru/v1/"
+# Пусть наше приложение предполагает запуск:
+# python search.py Москва, ул. Ак. Королева, 12
+# Тогда запрос к геокодеру формируется следующим образом:
+toponym_to_find = " ".join(sys.argv[1:])
 
-address_ll = "37.588392,55.734036"
+geocoder_api_server = "http://geocode-maps.yandex.ru/1.x/"
 
-search_params = {
-    "apikey": API_KEY,
-    "text": "аптека",
-    "lang": "ru_RU",
-    "ll": address_ll,
-    "type": "biz"
-}
+geocoder_params = {
+    "apikey": "8013b162-6b42-4997-9691-77b7074026e0",
+    "geocode": toponym_to_find,
+    "format": "json"}
 
-response = requests.get(search_api_server, params=search_params)
+response = requests.get(geocoder_api_server, params=geocoder_params)
+
 if not response:
-    #...
+    # обработка ошибочной ситуации
     pass
 
+# Преобразуем ответ в json-объект
 json_response = response.json()
 json.dump(json_response, open('request0.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=4)
-
-# Получаем первую найденную организацию.
-organization = json_response["features"][0]
-# Название организации.
-org_name = organization["properties"]["CompanyMetaData"]["name"]
-# Адрес организации.
-org_address = organization["properties"]["CompanyMetaData"]["address"]
-
-# Получаем координаты ответа.
-point = organization["geometry"]["coordinates"]
-org_point = f"{point[0]},{point[1]}"
+# Получаем первый топоним из ответа геокодера.
+toponym = json_response["response"]["GeoObjectCollection"]["featureMember"][0]["GeoObject"]
+# Координаты центра топонима:
+toponym_coodrinates = toponym["Point"]["pos"]
+# Долгота и широта:
+toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
 apikey = "f3a0fe3a-b07e-4840-a1da-06f18b2ddf13"
-spn_delta = find_spn_delta(json_response)
 
 # Собираем параметры для запроса к StaticMapsAPI:
 map_params = {
-    # позиционируем карту центром на наш исходный адрес
-    "ll": address_ll,
-    "spn": ",".join(map(str, spn_delta)),
+    "ll": ",".join([toponym_longitude, toponym_lattitude]),
+    "spn": ",".join(map(str, find_spn_delta(json_response))),
     "apikey": apikey,
-    # добавим точку, чтобы указать найденную аптеку
-    "pt": "{0},pm2dgl".format(org_point)
+    "pt": "{0},pm2dgl".format(toponym_longitude + ',' + toponym_lattitude)
+
 }
 
 map_api_server = "https://static-maps.yandex.ru/v1"
@@ -60,4 +49,4 @@ map_api_server = "https://static-maps.yandex.ru/v1"
 response = requests.get(map_api_server, params=map_params)
 im = BytesIO(response.content)
 opened_image = Image.open(im)
-opened_image.show()
+opened_image.show()  # Создадим картинку и тут же ее покажем встроенным просмотрщиком операционной системы

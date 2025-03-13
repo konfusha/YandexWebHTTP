@@ -1,5 +1,5 @@
 def find_spn_delta(json_response):
-    organization = json_response["features"][0]
-    dx = organization["properties"]["boundedBy"][1][0] - organization["properties"]["boundedBy"][0][0]
-    dy = organization["properties"]["boundedBy"][1][1] - organization["properties"]["boundedBy"][0][1]
+    envelope = json_response["response"]["GeoObjectCollection"]["featureMember"][0]["GeoObject"]["boundedBy"]["Envelope"]
+    dx = float(envelope["upperCorner"].split()[0]) - float(envelope["lowerCorner"].split()[0])
+    dy = float(envelope["upperCorner"].split()[1]) - float(envelope["lowerCorner"].split()[1])
     return [dx, dy]
